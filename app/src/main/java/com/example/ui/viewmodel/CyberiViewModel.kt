@@ -9,12 +9,17 @@ import com.example.audio.AudioPlaybackManager
 import com.example.audio.MediaStoreExporter
 import com.example.audio.PlaybackUiState
 import com.example.data.db.RecordingEntity
+import com.example.data.repository.ContactsRepository
+import com.example.data.repository.DeviceContact
 import com.example.model.AudioFormatOption
 import com.example.model.AudioSourceOption
 import com.example.model.CallType
 import com.example.model.RecordingSettings
+import com.example.model.StorageLimitOption
 import com.example.service.CallRecorderService
 import com.example.service.LiveRecorderState
+import com.example.service.PermissionHandlingService
+import com.example.service.PermissionSummary
 import com.example.util.DeviceCompatibilityManager
 import com.example.util.DeviceCompatibilityStatus
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,7 +38,7 @@ enum class RecordingFilter(val label: String) {
     ALL("همه"),
     INCOMING("ورودی"),
     OUTGOING("خروجی"),
-    MANUAL("آزمایشی"),
+    MANUAL("ضبط دستی"),
     FAVORITES("نشان‌شده")
 }
 
@@ -41,6 +47,8 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
     private val app = application as CyberiApplication
     private val recordingRepository = app.recordingRepository
     private val settingsRepository = app.settingsRepository
+    private val contactsRepository = ContactsRepository(app)
+    val permissionService = PermissionHandlingService(app)
     private val playbackManager = AudioPlaybackManager(viewModelScope)
 
     private val _searchQuery = MutableStateFlow("")
@@ -52,11 +60,20 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
     private val _deviceStatus = MutableStateFlow(DeviceCompatibilityManager.inspectDevice(app))
     val deviceStatus: StateFlow<DeviceCompatibilityStatus> = _deviceStatus.asStateFlow()
 
+    val permissionSummary: StateFlow<PermissionSummary> = permissionService.permissionSummary
+
+    private val _contacts = MutableStateFlow<List<DeviceContact>>(emptyList())
+    val contacts: StateFlow<List<DeviceContact>> = _contacts.asStateFlow()
+
     val settings: StateFlow<RecordingSettings> = settingsRepository.settingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecordingSettings())
 
     val allRecordings: StateFlow<List<RecordingEntity>> = recordingRepository.allRecordings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val totalStorageUsedBytes: StateFlow<Long> = allRecordings
+        .map { list -> list.sumOf { it.fileSizeBytes } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     val filteredRecordings: StateFlow<List<RecordingEntity>> = combine(
         allRecordings,
@@ -74,6 +91,7 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
             val q = query.trim()
             val matchesQuery = q.isEmpty() ||
                 item.title.contains(q, ignoreCase = true) ||
+                (item.contactName?.contains(q, ignoreCase = true) == true) ||
                 item.fileName.contains(q, ignoreCase = true) ||
                 item.formatId.contains(q, ignoreCase = true)
             matchesFilter && matchesQuery
@@ -86,6 +104,7 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
     fun refreshDeviceStatusAndSyncService() {
         val status = DeviceCompatibilityManager.inspectDevice(app)
         _deviceStatus.value = status
+        permissionService.refresh()
         viewModelScope.launch {
             val currentSettings = settingsRepository.getCurrentSettings()
             if (status.allCorePermissionsGranted && currentSettings.autoRecordEnabled && currentSettings.keepMonitorServiceAlive) {
@@ -93,6 +112,18 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
             } else if (!currentSettings.autoRecordEnabled || !currentSettings.keepMonitorServiceAlive) {
                 CallRecorderService.stopMonitoring(app)
             }
+        }
+    }
+
+    fun loadContacts(query: String = "") {
+        viewModelScope.launch {
+            _contacts.value = contactsRepository.loadContacts(query)
+        }
+    }
+
+    fun assignContactToRecording(recordingId: Long, contactName: String?) {
+        viewModelScope.launch {
+            recordingRepository.setContactName(recordingId, contactName)
         }
     }
 
@@ -140,6 +171,36 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setAudioSource(source: AudioSourceOption) {
         updateSettings { it.copy(audioSource = source) }
+    }
+
+    fun setStorageLimit(limit: StorageLimitOption) {
+        viewModelScope.launch {
+            settingsRepository.updateSettings { it.copy(storageLimit = limit) }
+            val current = settingsRepository.getCurrentSettings()
+            if (current.autoDeleteOldestOnLimit && limit.limitBytes > 0L) {
+                val deleted = recordingRepository.enforceStorageLimit(limit.limitBytes, true)
+                if (deleted > 0) {
+                    Toast.makeText(app, "$deleted فایل قدیمی برای رعایت سقف فضا حذف شد", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun cleanupStorageNow() {
+        viewModelScope.launch {
+            val current = settingsRepository.getCurrentSettings()
+            if (current.storageLimit.limitBytes <= 0L) {
+                Toast.makeText(app, "سقف فضا روی نامحدود تنظیم شده است", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val deleted = recordingRepository.enforceStorageLimit(current.storageLimit.limitBytes, true)
+            val msg = if (deleted > 0) {
+                "$deleted فایل قدیمی‌تر پاکسازی شد"
+            } else {
+                "فضای مصرفی در محدوده مجاز است"
+            }
+            Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun togglePlay(recording: RecordingEntity) {

@@ -8,6 +8,7 @@ data class RecordingEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val title: String,
+    val contactName: String? = null,
     val callType: String,
     val filePath: String,
     val fileName: String,

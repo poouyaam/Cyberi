@@ -322,7 +322,7 @@ class CallRecorderService : Service() {
                 val title = when (callType) {
                     CallType.INCOMING -> "مکالمه ورودی ($readableTime)"
                     CallType.OUTGOING -> "مکالمه خروجی ($readableTime)"
-                    CallType.MANUAL -> "ضبط آزمایشی ($readableTime)"
+                    CallType.MANUAL -> "ضبط دستی ($readableTime)"
                 }
 
                 val exportedUri = if (settings.autoExportToMusic) {
@@ -354,6 +354,10 @@ class CallRecorderService : Service() {
                     waveformSamples = waveform.joinToString(",")
                 )
                 recordingRepository.insert(entity)
+                recordingRepository.enforceStorageLimit(
+                    limitBytes = settings.storageLimit.limitBytes,
+                    autoDeleteOldest = settings.autoDeleteOldestOnLimit
+                )
                 savedTitle = title
 
                 if (settings.showNotifications) {

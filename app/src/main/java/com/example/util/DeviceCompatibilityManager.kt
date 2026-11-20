@@ -18,6 +18,7 @@ import java.util.Locale
 data class DeviceCompatibilityStatus(
     val hasRecordAudio: Boolean,
     val hasReadPhoneState: Boolean,
+    val hasReadContacts: Boolean,
     val hasPostNotifications: Boolean,
     val isBatteryOptimizationIgnored: Boolean,
     val supportsNoiseSuppressor: Boolean,
@@ -30,7 +31,7 @@ data class DeviceCompatibilityStatus(
         get() = hasRecordAudio && hasReadPhoneState
 
     val allRecommendedReady: Boolean
-        get() = allCorePermissionsGranted && hasPostNotifications
+        get() = allCorePermissionsGranted && hasReadContacts && hasPostNotifications
 }
 
 object DeviceCompatibilityManager {
@@ -38,7 +39,8 @@ object DeviceCompatibilityManager {
     fun requiredPermissions(): Array<String> {
         val list = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.READ_PHONE_STATE
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CONTACTS
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             list.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -57,6 +59,11 @@ object DeviceCompatibilityManager {
             Manifest.permission.READ_PHONE_STATE
         ) == PackageManager.PERMISSION_GRANTED
 
+        val hasContacts = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
+
         val hasNotif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
                 context,
@@ -72,6 +79,7 @@ object DeviceCompatibilityManager {
         return DeviceCompatibilityStatus(
             hasRecordAudio = hasMic,
             hasReadPhoneState = hasPhone,
+            hasReadContacts = hasContacts,
             hasPostNotifications = hasNotif,
             isBatteryOptimizationIgnored = batteryIgnored,
             supportsNoiseSuppressor = NoiseSuppressor.isAvailable(),
@@ -120,7 +128,9 @@ object DeviceCompatibilityManager {
         val kb = bytes / 1024.0
         if (kb < 1024) return String.format(Locale.US, "%.1f KB", kb)
         val mb = kb / 1024.0
-        return String.format(Locale.US, "%.2f MB", mb)
+        if (mb < 1024) return String.format(Locale.US, "%.2f MB", mb)
+        val gb = mb / 1024.0
+        return String.format(Locale.US, "%.2f GB", gb)
     }
 
     fun formatTimestamp(timestamp: Long): String {

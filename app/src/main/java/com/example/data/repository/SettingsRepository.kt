@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.model.AudioFormatOption
 import com.example.model.AudioSourceOption
 import com.example.model.RecordingSettings
+import com.example.model.StorageLimitOption
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -38,55 +39,19 @@ class SettingsRepository(private val context: Context) {
         val AUTO_EXPORT_MUSIC = booleanPreferencesKey("auto_export_music")
         val SHOW_NOTIFICATIONS = booleanPreferencesKey("show_notifications")
         val KEEP_MONITOR_ALIVE = booleanPreferencesKey("keep_monitor_alive")
+        val STORAGE_LIMIT = stringPreferencesKey("storage_limit")
+        val AUTO_DELETE_OLDEST = booleanPreferencesKey("auto_delete_oldest")
     }
 
     val settingsFlow: Flow<RecordingSettings> = context.settingsDataStore.data.map { prefs ->
-        RecordingSettings(
-            autoRecordEnabled = prefs[Keys.AUTO_RECORD_ENABLED] ?: true,
-            recordIncomingCalls = prefs[Keys.RECORD_INCOMING] ?: true,
-            recordOutgoingCalls = prefs[Keys.RECORD_OUTGOING] ?: true,
-            audioFormat = AudioFormatOption.fromId(prefs[Keys.AUDIO_FORMAT]),
-            audioSource = AudioSourceOption.fromId(prefs[Keys.AUDIO_SOURCE]),
-            sampleRateHz = prefs[Keys.SAMPLE_RATE_HZ] ?: 48000,
-            bitrateKbps = prefs[Keys.BITRATE_KBPS] ?: 192,
-            stereoChannels = prefs[Keys.STEREO_CHANNELS] ?: false,
-            noiseSuppression = prefs[Keys.NOISE_SUPPRESSION] ?: true,
-            autoGainControl = prefs[Keys.AUTO_GAIN_CONTROL] ?: true,
-            echoCancellation = prefs[Keys.ECHO_CANCELLATION] ?: true,
-            micGainPercent = prefs[Keys.MIC_GAIN_PERCENT] ?: 140,
-            autoSpeakerBoost = prefs[Keys.AUTO_SPEAKER_BOOST] ?: false,
-            startDelaySeconds = prefs[Keys.START_DELAY_SECONDS] ?: 0,
-            minDurationSeconds = prefs[Keys.MIN_DURATION_SECONDS] ?: 2,
-            autoExportToMusic = prefs[Keys.AUTO_EXPORT_MUSIC] ?: true,
-            showNotifications = prefs[Keys.SHOW_NOTIFICATIONS] ?: true,
-            keepMonitorServiceAlive = prefs[Keys.KEEP_MONITOR_ALIVE] ?: true
-        )
+        mapPreferences(prefs)
     }
 
     suspend fun getCurrentSettings(): RecordingSettings = settingsFlow.first()
 
     suspend fun updateSettings(transform: (RecordingSettings) -> RecordingSettings) {
         context.settingsDataStore.edit { prefs ->
-            val current = RecordingSettings(
-                autoRecordEnabled = prefs[Keys.AUTO_RECORD_ENABLED] ?: true,
-                recordIncomingCalls = prefs[Keys.RECORD_INCOMING] ?: true,
-                recordOutgoingCalls = prefs[Keys.RECORD_OUTGOING] ?: true,
-                audioFormat = AudioFormatOption.fromId(prefs[Keys.AUDIO_FORMAT]),
-                audioSource = AudioSourceOption.fromId(prefs[Keys.AUDIO_SOURCE]),
-                sampleRateHz = prefs[Keys.SAMPLE_RATE_HZ] ?: 48000,
-                bitrateKbps = prefs[Keys.BITRATE_KBPS] ?: 192,
-                stereoChannels = prefs[Keys.STEREO_CHANNELS] ?: false,
-                noiseSuppression = prefs[Keys.NOISE_SUPPRESSION] ?: true,
-                autoGainControl = prefs[Keys.AUTO_GAIN_CONTROL] ?: true,
-                echoCancellation = prefs[Keys.ECHO_CANCELLATION] ?: true,
-                micGainPercent = prefs[Keys.MIC_GAIN_PERCENT] ?: 140,
-                autoSpeakerBoost = prefs[Keys.AUTO_SPEAKER_BOOST] ?: false,
-                startDelaySeconds = prefs[Keys.START_DELAY_SECONDS] ?: 0,
-                minDurationSeconds = prefs[Keys.MIN_DURATION_SECONDS] ?: 2,
-                autoExportToMusic = prefs[Keys.AUTO_EXPORT_MUSIC] ?: true,
-                showNotifications = prefs[Keys.SHOW_NOTIFICATIONS] ?: true,
-                keepMonitorServiceAlive = prefs[Keys.KEEP_MONITOR_ALIVE] ?: true
-            )
+            val current = mapPreferences(prefs)
             val updated = transform(current)
             prefs[Keys.AUTO_RECORD_ENABLED] = updated.autoRecordEnabled
             prefs[Keys.RECORD_INCOMING] = updated.recordIncomingCalls
@@ -106,6 +71,33 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.AUTO_EXPORT_MUSIC] = updated.autoExportToMusic
             prefs[Keys.SHOW_NOTIFICATIONS] = updated.showNotifications
             prefs[Keys.KEEP_MONITOR_ALIVE] = updated.keepMonitorServiceAlive
+            prefs[Keys.STORAGE_LIMIT] = updated.storageLimit.id
+            prefs[Keys.AUTO_DELETE_OLDEST] = updated.autoDeleteOldestOnLimit
         }
+    }
+
+    private fun mapPreferences(prefs: Preferences): RecordingSettings {
+        return RecordingSettings(
+            autoRecordEnabled = prefs[Keys.AUTO_RECORD_ENABLED] ?: true,
+            recordIncomingCalls = prefs[Keys.RECORD_INCOMING] ?: true,
+            recordOutgoingCalls = prefs[Keys.RECORD_OUTGOING] ?: true,
+            audioFormat = AudioFormatOption.fromId(prefs[Keys.AUDIO_FORMAT]),
+            audioSource = AudioSourceOption.fromId(prefs[Keys.AUDIO_SOURCE]),
+            sampleRateHz = prefs[Keys.SAMPLE_RATE_HZ] ?: 48000,
+            bitrateKbps = prefs[Keys.BITRATE_KBPS] ?: 192,
+            stereoChannels = prefs[Keys.STEREO_CHANNELS] ?: false,
+            noiseSuppression = prefs[Keys.NOISE_SUPPRESSION] ?: true,
+            autoGainControl = prefs[Keys.AUTO_GAIN_CONTROL] ?: true,
+            echoCancellation = prefs[Keys.ECHO_CANCELLATION] ?: true,
+            micGainPercent = prefs[Keys.MIC_GAIN_PERCENT] ?: 140,
+            autoSpeakerBoost = prefs[Keys.AUTO_SPEAKER_BOOST] ?: false,
+            startDelaySeconds = prefs[Keys.START_DELAY_SECONDS] ?: 0,
+            minDurationSeconds = prefs[Keys.MIN_DURATION_SECONDS] ?: 2,
+            autoExportToMusic = prefs[Keys.AUTO_EXPORT_MUSIC] ?: true,
+            showNotifications = prefs[Keys.SHOW_NOTIFICATIONS] ?: true,
+            keepMonitorServiceAlive = prefs[Keys.KEEP_MONITOR_ALIVE] ?: true,
+            storageLimit = StorageLimitOption.fromId(prefs[Keys.STORAGE_LIMIT]),
+            autoDeleteOldestOnLimit = prefs[Keys.AUTO_DELETE_OLDEST] ?: true
+        )
     }
 }

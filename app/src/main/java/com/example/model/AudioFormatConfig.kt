@@ -10,6 +10,7 @@ enum class AudioFormatOption(
     val extension: String,
     val mimeType: String,
     val description: String,
+    val qualityLevel: Int,
     val isPrimaryDefault: Boolean = false,
     val minApiLevel: Int = 24
 ) {
@@ -20,6 +21,7 @@ enum class AudioFormatOption(
         extension = "m4a",
         mimeType = "audio/mp4",
         description = "فرمت اصلی و حرفه‌ای؛ وضوح مکالمه عالی، حجم متعادل و قابل پخش در تمام گوشی‌ها",
+        qualityLevel = 5,
         isPrimaryDefault = true
     ),
     WAV_PCM(
@@ -28,7 +30,8 @@ enum class AudioFormatOption(
         shortBadge = "بدون افت کیفیت",
         extension = "wav",
         mimeType = "audio/wav",
-        description = "ضبط استودیویی بدون فشرده‌سازی با موتور تقویت هوشمند صدای طرف مقابل و حذف نویز"
+        description = "ضبط استودیویی بدون فشرده‌سازی با موتور تقویت هوشمند صدای طرف مقابل و حذف نویز",
+        qualityLevel = 5
     ),
     OGG_OPUS(
         id = "OGG_OPUS",
@@ -37,6 +40,7 @@ enum class AudioFormatOption(
         extension = "ogg",
         mimeType = "audio/ogg",
         description = "وضوح فوق‌العاده صدای انسان با کدک Opus و حجم بسیار بهینه (اندروید ۱۰ به بالا)",
+        qualityLevel = 4,
         minApiLevel = Build.VERSION_CODES.Q
     ),
     THREE_GP_AMR_WB(
@@ -45,7 +49,8 @@ enum class AudioFormatOption(
         shortBadge = "مخابراتی",
         extension = "3gp",
         mimeType = "audio/3gpp",
-        description = "فرمت استاندارد ضبط تماس مخابراتی با حجم کم و سازگاری بالا"
+        description = "فرمت استاندارد ضبط تماس مخابراتی با حجم کم و سازگاری بالا",
+        qualityLevel = 3
     ),
     WEBM_OPUS(
         id = "WEBM_OPUS",
@@ -53,7 +58,8 @@ enum class AudioFormatOption(
         shortBadge = "اشتراک‌گذاری سریع",
         extension = "webm",
         mimeType = "audio/webm",
-        description = "مناسب برای اشتراک‌گذاری سریع با کیفیت صدای دیجیتال"
+        description = "مناسب برای اشتراک‌گذاری سریع با کیفیت صدای دیجیتال",
+        qualityLevel = 4
     ),
     AMR_WB(
         id = "AMR_WB",
@@ -61,7 +67,8 @@ enum class AudioFormatOption(
         shortBadge = "فوق‌فشرده HD",
         extension = "awb",
         mimeType = "audio/amr-wb",
-        description = "فرمت اختصاصی صدای مکالمه پهن‌باند با کمترین اشغال حافظه"
+        description = "فرمت اختصاصی صدای مکالمه پهن‌باند با کمترین اشغال حافظه",
+        qualityLevel = 3
     ),
     AMR_NB(
         id = "AMR_NB",
@@ -69,7 +76,8 @@ enum class AudioFormatOption(
         shortBadge = "حداقل حجم",
         extension = "amr",
         mimeType = "audio/amr",
-        description = "ساده‌ترین فرمت فشرده با کوچک‌ترین حجم فایل برای آرشیو طولانی"
+        description = "ساده‌ترین فرمت فشرده با کوچک‌ترین حجم فایل برای آرشیو طولانی",
+        qualityLevel = 2
     );
 
     fun isSupportedOnDevice(): Boolean = Build.VERSION.SDK_INT >= minApiLevel
@@ -123,10 +131,28 @@ enum class AudioSourceOption(
     }
 }
 
+enum class StorageLimitOption(
+    val id: String,
+    val label: String,
+    val limitBytes: Long
+) {
+    MB_250("MB_250", "250 MB", 250L * 1024L * 1024L),
+    MB_500("MB_500", "500 MB", 500L * 1024L * 1024L),
+    GB_1("GB_1", "1 GB", 1024L * 1024L * 1024L),
+    GB_2("GB_2", "2 GB", 2L * 1024L * 1024L * 1024L),
+    GB_5("GB_5", "5 GB", 5L * 1024L * 1024L * 1024L),
+    UNLIMITED("UNLIMITED", "نامحدود", -1L);
+
+    companion object {
+        fun fromId(id: String?): StorageLimitOption =
+            entries.firstOrNull { it.id == id } ?: GB_1
+    }
+}
+
 enum class CallType(val id: String, val label: String) {
     INCOMING("INCOMING", "تماس ورودی"),
     OUTGOING("OUTGOING", "تماس خروجی"),
-    MANUAL("MANUAL", "ضبط آزمایشی / دستی");
+    MANUAL("MANUAL", "ضبط دستی");
 
     companion object {
         fun fromId(id: String?): CallType =
@@ -152,5 +178,7 @@ data class RecordingSettings(
     val minDurationSeconds: Int = 2,
     val autoExportToMusic: Boolean = true,
     val showNotifications: Boolean = true,
-    val keepMonitorServiceAlive: Boolean = true
+    val keepMonitorServiceAlive: Boolean = true,
+    val storageLimit: StorageLimitOption = StorageLimitOption.GB_1,
+    val autoDeleteOldestOnLimit: Boolean = true
 )

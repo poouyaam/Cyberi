@@ -1,12 +1,15 @@
 package com.example
 
+import android.Manifest
 import android.content.Context
 import android.telephony.TelephonyManager
 import androidx.test.core.app.ApplicationProvider
 import com.example.model.AudioFormatOption
 import com.example.model.CallType
+import com.example.model.StorageLimitOption
 import com.example.service.CallStateTracker
 import com.example.service.CallTransition
+import com.example.service.PermissionHandlingService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -41,7 +44,6 @@ class ExampleRobolectricTest {
         val answered = CallStateTracker.onTelephonyStateChanged(context, TelephonyManager.CALL_STATE_OFFHOOK)
         assertEquals(CallTransition.StartRecording(CallType.INCOMING), answered)
 
-        // Duplicate OFFHOOK broadcast must not trigger again
         val duplicateOffhook = CallStateTracker.onTelephonyStateChanged(context, TelephonyManager.CALL_STATE_OFFHOOK)
         assertEquals(CallTransition.None, duplicateOffhook)
 
@@ -71,12 +73,24 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `primary default audio format is M4A_AAC and all formats resolve`() {
+    fun `permission handling service includes mic phone state and contacts`() {
+        val permService = PermissionHandlingService(context)
+        val required = permService.getAllRequiredPermissions().toSet()
+        assertTrue(required.contains(Manifest.permission.RECORD_AUDIO))
+        assertTrue(required.contains(Manifest.permission.READ_PHONE_STATE))
+        assertTrue(required.contains(Manifest.permission.READ_CONTACTS))
+    }
+
+    @Test
+    fun `primary default audio format and storage limits resolve cleanly`() {
         val primary = AudioFormatOption.entries.single { it.isPrimaryDefault }
         assertEquals(AudioFormatOption.M4A_AAC, primary)
-        assertTrue(AudioFormatOption.entries.size == 7)
+        assertEquals(7, AudioFormatOption.entries.size)
         AudioFormatOption.entries.forEach { format ->
             assertEquals(format, AudioFormatOption.fromId(format.id))
+        }
+        StorageLimitOption.entries.forEach { limit ->
+            assertEquals(limit, StorageLimitOption.fromId(limit.id))
         }
     }
 }

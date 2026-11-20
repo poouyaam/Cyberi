@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.rounded.FolderCopy
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.DropdownMenu
@@ -58,11 +60,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,24 +78,10 @@ import com.example.audio.PlaybackUiState
 import com.example.data.db.RecordingEntity
 import com.example.model.AudioFormatOption
 import com.example.model.CallType
-import com.example.ui.theme.CyberAmber
-import com.example.ui.theme.CyberBlue
-import com.example.ui.theme.CyberCrimson
-import com.example.ui.theme.CyberCyan
-import com.example.ui.theme.CyberDeepNavy
-import com.example.ui.theme.CyberEmerald
-import com.example.ui.theme.CyberIndigo
-import com.example.ui.theme.CyberSurface
-import com.example.ui.theme.CyberVoid
-import com.example.ui.theme.GlassBorderBright
-import com.example.ui.theme.GlassBorderSubtle
-import com.example.ui.theme.GlassFill
-import com.example.ui.theme.GlassFillLight
+import com.example.ui.theme.CyberiTheme
 import com.example.ui.theme.SpaceGroteskFontFamily
-import com.example.ui.theme.TextMuted
-import com.example.ui.theme.TextPrimary
-import com.example.ui.theme.TextSecondary
 import com.example.util.DeviceCompatibilityManager
+import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
@@ -98,42 +89,71 @@ fun CyberGlassBackground(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    val colors = CyberiTheme.colors
+    val auroraTransition = rememberInfiniteTransition(label = "aurora_drift")
+    val drift by auroraTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (Math.PI * 2).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(16000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "drift"
+    )
+
+    val orbAlpha1 = if (colors.isDark) 0.22f else 0.11f
+    val orbAlpha2 = if (colors.isDark) 0.24f else 0.10f
+    val orbAlpha3 = if (colors.isDark) 0.18f else 0.09f
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(CyberVoid, CyberDeepNavy, CyberVoid)
+                    colors = listOf(colors.bgTop, colors.bgBottom, colors.bgTop)
                 )
             )
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val aquaCenter = Offset(
+                x = size.width * (0.78f + 0.08f * cos(drift)),
+                y = size.height * (0.12f + 0.04f * sin(drift))
+            )
+            val violetCenter = Offset(
+                x = size.width * (0.16f + 0.07f * sin(drift)),
+                y = size.height * (0.48f + 0.05f * cos(drift))
+            )
+            val skyCenter = Offset(
+                x = size.width * (0.80f - 0.06f * sin(drift)),
+                y = size.height * (0.86f + 0.03f * cos(drift))
+            )
+
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(CyberCyan.copy(alpha = 0.14f), Color.Transparent),
-                    center = Offset(size.width * 0.85f, size.height * 0.10f),
+                    colors = listOf(colors.cyan.copy(alpha = orbAlpha1), Color.Transparent),
+                    center = aquaCenter,
+                    radius = size.width * 0.78f
+                ),
+                center = aquaCenter,
+                radius = size.width * 0.78f
+            )
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(colors.indigo.copy(alpha = orbAlpha2), Color.Transparent),
+                    center = violetCenter,
                     radius = size.width * 0.72f
                 ),
-                center = Offset(size.width * 0.85f, size.height * 0.10f),
+                center = violetCenter,
                 radius = size.width * 0.72f
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(CyberIndigo.copy(alpha = 0.16f), Color.Transparent),
-                    center = Offset(size.width * 0.12f, size.height * 0.55f),
+                    colors = listOf(colors.blue.copy(alpha = orbAlpha3), Color.Transparent),
+                    center = skyCenter,
                     radius = size.width * 0.65f
                 ),
-                center = Offset(size.width * 0.12f, size.height * 0.55f),
+                center = skyCenter,
                 radius = size.width * 0.65f
-            )
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(CyberBlue.copy(alpha = 0.12f), Color.Transparent),
-                    center = Offset(size.width * 0.75f, size.height * 0.90f),
-                    radius = size.width * 0.55f
-                ),
-                center = Offset(size.width * 0.75f, size.height * 0.90f),
-                radius = size.width * 0.55f
             )
         }
         content()
@@ -145,24 +165,26 @@ fun GlassCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 24.dp,
     highlighted: Boolean = false,
-    accentColor: Color = CyberCyan,
+    accentColor: Color = CyberiTheme.colors.cyan,
+    contentPadding: Dp = 16.dp,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val colors = CyberiTheme.colors
     val borderBrush = if (highlighted) {
         Brush.linearGradient(
             colors = listOf(
-                accentColor.copy(alpha = 0.7f),
-                GlassBorderSubtle,
-                accentColor.copy(alpha = 0.35f)
+                accentColor.copy(alpha = if (colors.isDark) 0.85f else 0.70f),
+                colors.indigo.copy(alpha = 0.45f),
+                colors.glassBorderSubtle
             )
         )
     } else {
         Brush.linearGradient(
             colors = listOf(
-                GlassBorderBright.copy(alpha = 0.35f),
-                GlassBorderSubtle,
-                Color.White.copy(alpha = 0.08f)
+                if (colors.isDark) Color.White.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.90f),
+                colors.glassBorderSubtle,
+                accentColor.copy(alpha = if (colors.isDark) 0.20f else 0.16f)
             )
         )
     }
@@ -170,13 +192,13 @@ fun GlassCard(
     val fillBrush = Brush.linearGradient(
         colors = if (highlighted) {
             listOf(
-                accentColor.copy(alpha = 0.14f),
-                GlassFill
+                accentColor.copy(alpha = if (colors.isDark) 0.18f else 0.08f),
+                colors.glassFillBottom
             )
         } else {
             listOf(
-                GlassFillLight,
-                GlassFill
+                colors.glassFillTop,
+                colors.glassFillBottom
             )
         }
     )
@@ -184,6 +206,16 @@ fun GlassCard(
     val shape = RoundedCornerShape(cornerRadius)
     Surface(
         modifier = modifier
+            .then(
+                if (!colors.isDark) {
+                    Modifier.shadow(
+                        elevation = 6.dp,
+                        shape = shape,
+                        ambientColor = Color.Black.copy(alpha = 0.07f),
+                        spotColor = accentColor.copy(alpha = 0.12f)
+                    )
+                } else Modifier
+            )
             .clip(shape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         shape = shape,
@@ -193,8 +225,47 @@ fun GlassCard(
         Column(
             modifier = Modifier
                 .background(fillBrush)
-                .padding(16.dp),
+                .padding(contentPadding),
             content = content
+        )
+    }
+}
+
+@Composable
+fun StorageArcGauge(
+    usedRatio: Float,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val colors = CyberiTheme.colors
+    val animatedSweep by animateFloatAsState(
+        targetValue = (usedRatio.coerceIn(0.03f, 1f)) * 270f,
+        animationSpec = tween(700, easing = FastOutSlowInEasing),
+        label = "storage_sweep"
+    )
+    Canvas(modifier = modifier) {
+        val stroke = 7.dp.toPx()
+        val inset = stroke / 2f
+        val arcSize = Size(size.width - stroke, size.height - stroke)
+        drawArc(
+            color = colors.textMuted.copy(alpha = 0.22f),
+            startAngle = 135f,
+            sweepAngle = 270f,
+            useCenter = false,
+            topLeft = Offset(inset, inset),
+            size = arcSize,
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+        drawArc(
+            brush = Brush.sweepGradient(
+                colors = listOf(colors.cyan, colors.indigo, accentColor)
+            ),
+            startAngle = 135f,
+            sweepAngle = animatedSweep,
+            useCenter = false,
+            topLeft = Offset(inset, inset),
+            size = arcSize,
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
         )
     }
 }
@@ -204,8 +275,9 @@ fun LiveAmplitudeBars(
     amplitude: Int,
     isActive: Boolean,
     modifier: Modifier = Modifier,
-    barColor: Color = CyberCrimson
+    barColor: Color = CyberiTheme.colors.crimson
 ) {
+    val colors = CyberiTheme.colors
     val infiniteTransition = rememberInfiniteTransition(label = "wave_anim")
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -217,26 +289,32 @@ fun LiveAmplitudeBars(
         label = "phase"
     )
     val smoothAmp by animateFloatAsState(
-        targetValue = if (isActive) (amplitude / 100f).coerceIn(0.12f, 1f) else 0.08f,
+        targetValue = if (isActive) (amplitude / 100f).coerceIn(0.14f, 1f) else 0.12f,
         animationSpec = tween(120),
         label = "amp"
     )
 
     Canvas(modifier = modifier.height(34.dp).fillMaxWidth()) {
-        val barCount = 28
+        val barCount = 30
         val spacing = size.width / barCount
-        val barWidth = (spacing * 0.55f).coerceAtLeast(3.dp.toPx())
+        val barWidth = (spacing * 0.52f).coerceAtLeast(3.dp.toPx())
         for (i in 0 until barCount) {
             val wave = if (isActive) {
                 (0.45f + 0.55f * ((sin(phase + i * 0.55f) + 1f) / 2f)) * smoothAmp
             } else {
-                0.15f
+                0.22f + 0.18f * ((sin(i * 0.7f) + 1f) / 2f)
             }
             val barH = (size.height * wave).coerceAtLeast(4.dp.toPx())
             val x = i * spacing + (spacing - barWidth) / 2f
             val y = (size.height - barH) / 2f
             drawRoundRect(
-                color = if (isActive) barColor else TextMuted.copy(alpha = 0.4f),
+                brush = Brush.verticalGradient(
+                    colors = if (isActive) {
+                        listOf(barColor, colors.indigo)
+                    } else {
+                        listOf(colors.cyan.copy(alpha = 0.5f), colors.indigo.copy(alpha = 0.28f))
+                    }
+                ),
                 topLeft = Offset(x, y),
                 size = Size(barWidth, barH),
                 cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
@@ -250,14 +328,16 @@ fun WaveformBars(
     samplesCsv: String,
     progressFraction: Float,
     isPlaying: Boolean,
+    accentColor: Color = CyberiTheme.colors.cyan,
     modifier: Modifier = Modifier
 ) {
+    val colors = CyberiTheme.colors
     val bars = remember(samplesCsv) {
         val parsed = samplesCsv.split(",")
             .mapNotNull { it.trim().toIntOrNull() }
             .take(36)
         if (parsed.size >= 8) parsed else List(30) { idx ->
-            22 + ((idx * 17) % 58)
+            24 + ((idx * 19) % 62)
         }
     }
 
@@ -268,16 +348,22 @@ fun WaveformBars(
     ) {
         val count = bars.size
         val step = size.width / count
-        val barW = (step * 0.58f).coerceAtLeast(2.5.dp.toPx())
+        val barW = (step * 0.56f).coerceAtLeast(2.5.dp.toPx())
         for (i in 0 until count) {
-            val ratio = (bars[i] / 100f).coerceIn(0.14f, 1f)
+            val ratio = (bars[i] / 100f).coerceIn(0.16f, 1f)
             val barH = size.height * ratio
             val x = i * step + (step - barW) / 2f
             val y = (size.height - barH) / 2f
             val barFraction = i.toFloat() / count
             val active = isPlaying && barFraction <= progressFraction
             drawRoundRect(
-                color = if (active) CyberCyan else TextSecondary.copy(alpha = 0.35f),
+                brush = Brush.verticalGradient(
+                    colors = if (active) {
+                        listOf(accentColor, colors.indigo)
+                    } else {
+                        listOf(colors.textSecondary.copy(alpha = 0.42f), colors.textMuted.copy(alpha = 0.22f))
+                    }
+                ),
                 topLeft = Offset(x, y),
                 size = Size(barW, barH),
                 cornerRadius = CornerRadius(barW / 2f, barW / 2f)
@@ -293,20 +379,22 @@ fun RecordingItemCard(
     playbackProgress: Float,
     onTogglePlay: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onAssignContactClick: () -> Unit,
     onRenameClick: () -> Unit,
     onShareClick: () -> Unit,
     onExportClick: () -> Unit,
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = CyberiTheme.colors
     var menuExpanded by remember { mutableStateOf(false) }
     val callType = CallType.fromId(recording.callType)
     val format = AudioFormatOption.fromId(recording.formatId)
 
     val typeColor = when (callType) {
-        CallType.INCOMING -> CyberEmerald
-        CallType.OUTGOING -> CyberCyan
-        CallType.MANUAL -> CyberAmber
+        CallType.INCOMING -> colors.emerald
+        CallType.OUTGOING -> colors.blue
+        CallType.MANUAL -> colors.amber
     }
     val typeIcon = when (callType) {
         CallType.INCOMING -> Icons.AutoMirrored.Rounded.CallReceived
@@ -315,7 +403,7 @@ fun RecordingItemCard(
     }
 
     val playButtonColor by animateColorAsState(
-        targetValue = if (isPlayingThis) CyberCyan else CyberSurface,
+        targetValue = if (isPlayingThis) colors.cyan else colors.surface,
         label = "play_bg"
     )
 
@@ -325,14 +413,27 @@ fun RecordingItemCard(
             .testTag("recording_card_${recording.id}"),
         cornerRadius = 22.dp,
         highlighted = isPlayingThis,
-        accentColor = CyberCyan,
+        accentColor = if (isPlayingThis) colors.cyan else typeColor,
+        contentPadding = 14.dp,
         onClick = onTogglePlay
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Play / Pause Circular Glass Button
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(typeColor, colors.indigo)
+                        )
+                    )
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+
             Surface(
                 modifier = Modifier
                     .size(48.dp)
@@ -341,8 +442,8 @@ fun RecordingItemCard(
                 shape = CircleShape,
                 color = playButtonColor,
                 border = BorderStroke(
-                    1.dp,
-                    if (isPlayingThis) CyberCyan else GlassBorderBright.copy(alpha = 0.45f)
+                    1.2.dp,
+                    if (isPlayingThis) colors.cyan else typeColor.copy(alpha = 0.55f)
                 ),
                 onClick = onTogglePlay
             ) {
@@ -350,7 +451,7 @@ fun RecordingItemCard(
                     Icon(
                         imageVector = if (isPlayingThis) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = if (isPlayingThis) "توقف پخش" else "پخش مکالمه",
-                        tint = if (isPlayingThis) CyberVoid else CyberCyan,
+                        tint = if (isPlayingThis) MaterialTheme.colorScheme.onPrimary else typeColor,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -370,12 +471,22 @@ fun RecordingItemCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = recording.title,
+                        text = recording.contactName ?: recording.title,
                         style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary,
+                        color = colors.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+
+                if (!recording.contactName.isNullOrBlank()) {
+                    Text(
+                        text = recording.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -387,14 +498,14 @@ fun RecordingItemCard(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = CyberCyan.copy(alpha = 0.14f)
+                        color = typeColor.copy(alpha = 0.14f)
                     ) {
                         Text(
                             text = format.extension.uppercase(),
                             fontFamily = SpaceGroteskFontFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
-                            color = CyberCyan,
+                            color = typeColor,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -402,13 +513,13 @@ fun RecordingItemCard(
                         text = DeviceCompatibilityManager.formatDuration(recording.durationMs),
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 12.sp,
-                        color = TextPrimary
+                        color = colors.textPrimary
                     )
                     Text(
                         text = "• ${DeviceCompatibilityManager.formatFileSize(recording.fileSizeBytes)}",
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
-                        color = TextSecondary
+                        color = colors.textSecondary
                     )
                 }
             }
@@ -420,7 +531,7 @@ fun RecordingItemCard(
                 Icon(
                     imageVector = if (recording.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     contentDescription = "نشان کردن مکالمه",
-                    tint = if (recording.isFavorite) CyberCrimson else TextSecondary
+                    tint = if (recording.isFavorite) colors.crimson else colors.textSecondary
                 )
             }
 
@@ -432,41 +543,49 @@ fun RecordingItemCard(
                     Icon(
                         imageVector = Icons.Rounded.MoreVert,
                         contentDescription = "گزینه‌های بیشتر",
-                        tint = TextSecondary
+                        tint = colors.textSecondary
                     )
                 }
                 DropdownMenu(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
-                    containerColor = CyberDeepNavy
+                    containerColor = MaterialTheme.colorScheme.surface
                 ) {
                     DropdownMenuItem(
-                        text = { Text("تغییر نام", color = TextPrimary) },
-                        leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = CyberCyan) },
+                        text = { Text("اتصال به مخاطب", color = colors.textPrimary) },
+                        leadingIcon = { Icon(Icons.Rounded.PersonAdd, null, tint = colors.indigo) },
+                        onClick = {
+                            menuExpanded = false
+                            onAssignContactClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("تغییر نام", color = colors.textPrimary) },
+                        leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = colors.cyan) },
                         onClick = {
                             menuExpanded = false
                             onRenameClick()
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("اشتراک‌گذاری فایل", color = TextPrimary) },
-                        leadingIcon = { Icon(Icons.Rounded.Share, null, tint = CyberEmerald) },
+                        text = { Text("اشتراک‌گذاری فایل", color = colors.textPrimary) },
+                        leadingIcon = { Icon(Icons.Rounded.Share, null, tint = colors.emerald) },
                         onClick = {
                             menuExpanded = false
                             onShareClick()
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("ذخیره در پوشه Music", color = TextPrimary) },
-                        leadingIcon = { Icon(Icons.Rounded.FolderCopy, null, tint = CyberAmber) },
+                        text = { Text("ذخیره در پوشه Music", color = colors.textPrimary) },
+                        leadingIcon = { Icon(Icons.Rounded.FolderCopy, null, tint = colors.amber) },
                         onClick = {
                             menuExpanded = false
                             onExportClick()
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("حذف مکالمه", color = CyberCrimson) },
-                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = CyberCrimson) },
+                        text = { Text("حذف مکالمه", color = colors.crimson) },
+                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null, tint = colors.crimson) },
                         onClick = {
                             menuExpanded = false
                             onDeleteClick()
@@ -481,7 +600,8 @@ fun RecordingItemCard(
         WaveformBars(
             samplesCsv = recording.waveformSamples,
             progressFraction = playbackProgress,
-            isPlaying = isPlayingThis
+            isPlaying = isPlayingThis,
+            accentColor = typeColor
         )
 
         Spacer(modifier = Modifier.height(6.dp))
@@ -494,7 +614,7 @@ fun RecordingItemCard(
             Text(
                 text = recording.audioSourceUsed,
                 style = MaterialTheme.typography.labelSmall,
-                color = TextMuted,
+                color = colors.textMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -503,7 +623,7 @@ fun RecordingItemCard(
                 text = DeviceCompatibilityManager.formatTimestamp(recording.timestamp),
                 fontFamily = SpaceGroteskFontFamily,
                 fontSize = 11.sp,
-                color = TextMuted
+                color = colors.textMuted
             )
         }
     }
@@ -520,16 +640,18 @@ fun MiniAudioPlayerBar(
 ) {
     if (playbackState.activeRecordingId == null) return
 
+    val colors = CyberiTheme.colors
     val duration = playbackState.durationMs.coerceAtLeast(1L)
     val progress = (playbackState.positionMs.toFloat() / duration).coerceIn(0f, 1f)
 
     GlassCard(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        cornerRadius = 20.dp,
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        cornerRadius = 22.dp,
         highlighted = true,
-        accentColor = CyberCyan
+        accentColor = colors.cyan,
+        contentPadding = 12.dp
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -542,7 +664,7 @@ fun MiniAudioPlayerBar(
                 Icon(
                     imageVector = if (playbackState.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = "پخش یا توقف",
-                    tint = CyberCyan,
+                    tint = colors.cyan,
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -551,7 +673,7 @@ fun MiniAudioPlayerBar(
                 Text(
                     text = playbackState.activeTitle,
                     style = MaterialTheme.typography.labelLarge,
-                    color = TextPrimary,
+                    color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -563,20 +685,21 @@ fun MiniAudioPlayerBar(
                         text = DeviceCompatibilityManager.formatDuration(playbackState.positionMs),
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
-                        color = CyberCyan
+                        color = colors.cyan
                     )
                     Text(
                         text = DeviceCompatibilityManager.formatDuration(duration),
                         fontFamily = SpaceGroteskFontFamily,
                         fontSize = 11.sp,
-                        color = TextSecondary
+                        color = colors.textSecondary
                     )
                 }
             }
 
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = CyberCyan.copy(alpha = 0.16f),
+                color = colors.indigo.copy(alpha = 0.16f),
+                border = BorderStroke(1.dp, colors.indigo.copy(alpha = 0.5f)),
                 onClick = onCycleSpeed,
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
@@ -587,7 +710,7 @@ fun MiniAudioPlayerBar(
                     fontFamily = SpaceGroteskFontFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    color = CyberCyan,
+                    color = colors.textPrimary,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
@@ -596,7 +719,7 @@ fun MiniAudioPlayerBar(
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = "بستن پخش‌کننده",
-                    tint = TextSecondary
+                    tint = colors.textSecondary
                 )
             }
         }
@@ -607,13 +730,13 @@ fun MiniAudioPlayerBar(
                 onSeek((fraction * duration).toLong())
             },
             colors = SliderDefaults.colors(
-                thumbColor = CyberCyan,
-                activeTrackColor = CyberCyan,
-                inactiveTrackColor = TextMuted.copy(alpha = 0.3f)
+                thumbColor = colors.cyan,
+                activeTrackColor = colors.cyan,
+                inactiveTrackColor = colors.textMuted.copy(alpha = 0.3f)
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(26.dp)
+                .height(24.dp)
         )
     }
 }

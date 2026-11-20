@@ -2,42 +2,59 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -57,14 +74,11 @@ import com.example.ui.components.MiniAudioPlayerBar
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.RecordingsScreen
 import com.example.ui.screens.SettingsScreen
-import com.example.ui.theme.CyberCyan
-import com.example.ui.theme.CyberDeepNavy
-import com.example.ui.theme.CyberVoid
 import com.example.ui.theme.CyberiTheme
-import com.example.ui.theme.TextPrimary
-import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.CyberiViewModel
 import com.example.util.DeviceCompatibilityManager
+import com.example.util.SupportActions
+import kotlinx.coroutines.launch
 
 sealed class CyberiDestination(
     val route: String,
@@ -72,16 +86,28 @@ sealed class CyberiDestination(
     val icon: ImageVector
 ) {
     data object Home : CyberiDestination("home", "خانه", Icons.Rounded.Home)
-    data object Recordings : CyberiDestination("recordings", "مکالمات", Icons.Rounded.Folder)
+    data object Recordings : CyberiDestination("recordings", "تاریخچه", Icons.Rounded.History)
     data object Settings : CyberiDestination("settings", "تنظیمات", Icons.Rounded.Settings)
 }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContent {
-            CyberiTheme {
+            val isDark = isSystemInDarkTheme()
+            LaunchedEffect(isDark) {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.auto(
+                        Color.Transparent.toArgb(),
+                        Color.Transparent.toArgb()
+                    ) { isDark },
+                    navigationBarStyle = SystemBarStyle.auto(
+                        Color.Transparent.toArgb(),
+                        Color.Transparent.toArgb()
+                    ) { isDark }
+                )
+            }
+            CyberiTheme(darkTheme = isDark) {
                 CyberiAppRoot()
             }
         }
@@ -95,12 +121,17 @@ fun CyberiAppRoot(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
+    val coroutineScope = rememberCoroutineScope()
+    val colors = CyberiTheme.colors
 
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val liveState by viewModel.liveRecorderState.collectAsStateWithLifecycle()
     val deviceStatus by viewModel.deviceStatus.collectAsStateWithLifecycle()
+    val permissionSummary by viewModel.permissionSummary.collectAsStateWithLifecycle()
     val allRecordings by viewModel.allRecordings.collectAsStateWithLifecycle()
+    val totalStorageBytes by viewModel.totalStorageUsedBytes.collectAsStateWithLifecycle()
     val filteredRecordings by viewModel.filteredRecordings.collectAsStateWithLifecycle()
+    val contacts by viewModel.contacts.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
@@ -113,23 +144,27 @@ fun CyberiAppRoot(
         viewModel.refreshDeviceStatusAndSyncService()
     }
 
-    val requestAllPermissions: () -> Unit = {
-        permissionLauncher.launch(DeviceCompatibilityManager.requiredPermissions())
+    val requestMissingPermissions: () -> Unit = {
+        val missing = viewModel.permissionService.getMissingPermissions()
+        if (missing.isNotEmpty()) {
+            permissionLauncher.launch(missing)
+        } else {
+            viewModel.refreshDeviceStatusAndSyncService()
+        }
     }
 
-    // Automatically trigger smart permission matching on first install/launch
     LaunchedEffect(Unit) {
         if (!autoRequestedOnLaunch) {
             autoRequestedOnLaunch = true
-            if (!deviceStatus.allRecommendedReady) {
-                requestAllPermissions()
+            val missing = viewModel.permissionService.getMissingPermissions()
+            if (missing.isNotEmpty()) {
+                permissionLauncher.launch(missing)
             } else {
                 viewModel.refreshDeviceStatusAndSyncService()
             }
         }
     }
 
-    // Re-sync device status & monitoring service whenever returning from Settings
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -158,6 +193,12 @@ fun CyberiAppRoot(
         }
     }
 
+    val shareAppAction: () -> Unit = {
+        coroutineScope.launch {
+            SupportActions.shareCyberiApp(context)
+        }
+    }
+
     CyberGlassBackground {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val useNavigationRail = maxWidth >= 700.dp
@@ -181,33 +222,12 @@ fun CyberiAppRoot(
                                 onCycleSpeed = viewModel::cyclePlaybackSpeed,
                                 onClose = viewModel::stopPlayback
                             )
-                            NavigationBar(
-                                containerColor = CyberDeepNavy.copy(alpha = 0.88f),
-                                tonalElevation = 0.dp
-                            ) {
-                                destinations.forEach { dest ->
-                                    val selected = currentRoute == dest.route
-                                    NavigationBarItem(
-                                        selected = selected,
-                                        onClick = { navigateTo(dest.route) },
-                                        icon = {
-                                            Icon(
-                                                imageVector = dest.icon,
-                                                contentDescription = dest.label
-                                            )
-                                        },
-                                        label = { Text(dest.label) },
-                                        colors = NavigationBarItemDefaults.colors(
-                                            selectedIconColor = CyberVoid,
-                                            selectedTextColor = CyberCyan,
-                                            indicatorColor = CyberCyan,
-                                            unselectedIconColor = TextSecondary,
-                                            unselectedTextColor = TextSecondary
-                                        ),
-                                        modifier = Modifier.testTag("nav_${dest.route}")
-                                    )
-                                }
-                            }
+
+                            FloatingGlassBottomBar(
+                                destinations = destinations,
+                                currentRoute = currentRoute,
+                                onNavigate = navigateTo
+                            )
                         }
                     }
                 }
@@ -219,7 +239,7 @@ fun CyberiAppRoot(
                 ) {
                     if (useNavigationRail) {
                         NavigationRail(
-                            containerColor = CyberDeepNavy.copy(alpha = 0.75f)
+                            containerColor = colors.surface.copy(alpha = 0.88f)
                         ) {
                             destinations.forEach { dest ->
                                 val selected = currentRoute == dest.route
@@ -234,11 +254,11 @@ fun CyberiAppRoot(
                                     },
                                     label = { Text(dest.label) },
                                     colors = NavigationRailItemDefaults.colors(
-                                        selectedIconColor = CyberVoid,
-                                        selectedTextColor = CyberCyan,
-                                        indicatorColor = CyberCyan,
-                                        unselectedIconColor = TextSecondary,
-                                        unselectedTextColor = TextPrimary
+                                        selectedIconColor = Color.White,
+                                        selectedTextColor = colors.cyan,
+                                        indicatorColor = colors.cyan,
+                                        unselectedIconColor = colors.textSecondary,
+                                        unselectedTextColor = colors.textPrimary
                                     ),
                                     modifier = Modifier.testTag("rail_${dest.route}")
                                 )
@@ -255,17 +275,22 @@ fun CyberiAppRoot(
                                 HomeScreen(
                                     settings = settings,
                                     liveState = liveState,
-                                    deviceStatus = deviceStatus,
+                                    permissionSummary = permissionSummary,
+                                    totalStorageBytes = totalStorageBytes,
                                     recentRecordings = allRecordings,
+                                    contacts = contacts,
                                     playbackState = playbackState,
-                                    onRequestPermissions = requestAllPermissions,
+                                    onRequestPermissions = requestMissingPermissions,
                                     onOpenBatterySettings = {
                                         DeviceCompatibilityManager.openBatteryOptimizationSettings(context)
                                     },
                                     onToggleAutoRecord = viewModel::toggleAutoRecord,
                                     onToggleManualRecord = viewModel::toggleManualRecording,
+                                    onShareApp = shareAppAction,
                                     onTogglePlay = viewModel::togglePlay,
                                     onToggleFavorite = viewModel::toggleFavorite,
+                                    onLoadContacts = viewModel::loadContacts,
+                                    onAssignContact = viewModel::assignContactToRecording,
                                     onRenameRecording = viewModel::renameRecording,
                                     onShareRecording = viewModel::shareRecording,
                                     onExportRecording = viewModel::exportToMusic,
@@ -278,6 +303,11 @@ fun CyberiAppRoot(
                             composable(CyberiDestination.Recordings.route) {
                                 RecordingsScreen(
                                     recordings = filteredRecordings,
+                                    allCount = allRecordings.size,
+                                    totalStorageBytes = totalStorageBytes,
+                                    settings = settings,
+                                    hasContactsPermission = permissionSummary.hasReadContacts,
+                                    contacts = contacts,
                                     searchQuery = searchQuery,
                                     selectedFilter = selectedFilter,
                                     playbackState = playbackState,
@@ -285,6 +315,9 @@ fun CyberiAppRoot(
                                     onFilterChange = viewModel::setFilter,
                                     onTogglePlay = viewModel::togglePlay,
                                     onToggleFavorite = viewModel::toggleFavorite,
+                                    onLoadContacts = viewModel::loadContacts,
+                                    onAssignContact = viewModel::assignContactToRecording,
+                                    onRequestContactsPermission = requestMissingPermissions,
                                     onRenameRecording = viewModel::renameRecording,
                                     onShareRecording = viewModel::shareRecording,
                                     onExportRecording = viewModel::exportToMusic,
@@ -296,21 +329,117 @@ fun CyberiAppRoot(
                             composable(CyberiDestination.Settings.route) {
                                 SettingsScreen(
                                     settings = settings,
+                                    totalStorageBytes = totalStorageBytes,
                                     deviceStatus = deviceStatus,
+                                    permissionSummary = permissionSummary,
                                     onUpdateSettings = viewModel::updateSettings,
                                     onSelectFormat = viewModel::setAudioFormat,
                                     onSelectSource = viewModel::setAudioSource,
-                                    onRequestPermissions = requestAllPermissions,
+                                    onSelectStorageLimit = viewModel::setStorageLimit,
+                                    onCleanupStorageNow = viewModel::cleanupStorageNow,
+                                    onRequestPermissions = requestMissingPermissions,
                                     onOpenBatterySettings = {
                                         DeviceCompatibilityManager.openBatteryOptimizationSettings(context)
                                     },
                                     onOpenSystemAppSettings = {
                                         DeviceCompatibilityManager.openAppPermissionSettings(context)
-                                    }
+                                    },
+                                    onOpenSupportEmail = {
+                                        SupportActions.openGmailSupport(context)
+                                    },
+                                    onOpenSupportDialer = {
+                                        SupportActions.openDialer(context)
+                                    },
+                                    onShareApp = shareAppAction
                                 )
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingGlassBottomBar(
+    destinations: List<CyberiDestination>,
+    currentRoute: String,
+    onNavigate: (String) -> Unit
+) {
+    val colors = CyberiTheme.colors
+    val shape = RoundedCornerShape(28.dp)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .then(
+                if (!colors.isDark) {
+                    Modifier.shadow(
+                        elevation = 10.dp,
+                        shape = shape,
+                        ambientColor = Color.Black.copy(alpha = 0.10f)
+                    )
+                } else Modifier
+            ),
+        shape = shape,
+        color = colors.glassFillBottom,
+        border = BorderStroke(
+            1.dp,
+            Brush.linearGradient(
+                colors = listOf(
+                    colors.glassBorderSubtle,
+                    colors.indigo.copy(alpha = 0.30f),
+                    colors.cyan.copy(alpha = 0.25f)
+                )
+            )
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            destinations.forEach { dest ->
+                val selected = currentRoute == dest.route
+                val itemModifier = Modifier
+                    .weight(1f)
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .then(
+                        if (selected) {
+                            Modifier.background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(colors.cyan, colors.blue)
+                                )
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .clickable { onNavigate(dest.route) }
+                    .testTag("nav_${dest.route}")
+
+                Row(
+                    modifier = itemModifier,
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = dest.icon,
+                        contentDescription = dest.label,
+                        tint = if (selected) Color.White else colors.textSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = dest.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) Color.White else colors.textSecondary
+                    )
                 }
             }
         }
