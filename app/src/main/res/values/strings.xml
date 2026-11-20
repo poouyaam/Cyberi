@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">سایبری</string>
+    <string name="notification_channel_monitoring_name">سرویس پایش تماس سایبری</string>
+    <string name="notification_channel_monitoring_desc">پایش هوشمند تماس‌های ورودی و خروجی برای ضبط خودکار</string>
+    <string name="notification_channel_recording_name">وضعیت ضبط مکالمه</string>
+    <string name="notification_channel_recording_desc">نمایش وضعیت ضبط فعال و ذخیره خودکار مکالمه</string>
+    <string name="monitoring_notif_title">سایبری آماده ضبط خودکار</string>
+    <string name="monitoring_notif_text">پایش هوشمند تماس‌های ورودی و خروجی فعال است</string>
+    <string name="recording_notif_title">در حال ضبط مکالمه…</string>
+    <string name="recording_notif_text">ضبط با وضوح بالا در حال انجام است</string>
+    <string name="saved_notif_title">مکالمه ذخیره شد</string>
+    <string name="saved_notif_text">فایل صوتی با موفقیت در حافظه ذخیره گردید</string>
+</resources>

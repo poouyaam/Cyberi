@@ -1,0 +1,6 @@
+{
+  "name": "سایبری",
+  "description": "ضبط هوشمند و حرفه‌ای مکالمات تلفنی با پشتیبانی از تمامی فرمت‌های صوتی و ذخیره خودکار",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
