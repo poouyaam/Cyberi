@@ -93,4 +93,17 @@ class ExampleRobolectricTest {
             assertEquals(limit, StorageLimitOption.fromId(limit.id))
         }
     }
+
+    @Test
+    fun `smart source priority puts VOICE_CALL first with VOICE_RECOGNITION and MIC fallback`() {
+        val callSources = com.example.audio.WavAudioRecorder.buildSourcePriorityList(
+            com.example.model.AudioSourceOption.VOICE_CALL,
+            CallType.OUTGOING
+        ).map { it.first }
+        assertEquals(android.media.MediaRecorder.AudioSource.VOICE_CALL, callSources.first())
+        assertTrue(callSources.indexOf(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION) <
+            callSources.indexOf(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION))
+        assertTrue(callSources.indexOf(android.media.MediaRecorder.AudioSource.MIC) <
+            callSources.indexOf(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION))
+    }
 }

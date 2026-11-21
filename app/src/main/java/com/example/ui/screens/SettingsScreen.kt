@@ -92,6 +92,7 @@ fun SettingsScreen(
     onRequestPermissions: () -> Unit,
     onOpenBatterySettings: () -> Unit,
     onOpenSystemAppSettings: () -> Unit,
+    onOpenOverlaySettings: () -> Unit,
     onOpenSupportEmail: () -> Unit,
     onOpenSupportDialer: () -> Unit,
     onShareApp: () -> Unit,
@@ -521,8 +522,18 @@ fun SettingsScreen(
 
                     GlassDivider()
                     SettingSwitchRow(
+                        title = "حالت پل تماس دوطرفه (تقویت خط تماس)",
+                        subtitle = "دریافت قدرتمند صدای شخصی که پشت خط است و بهینه‌سازی ضبط دوطرفه",
+                        checked = settings.twoWayBridgeBoost,
+                        testTag = "switch_two_way_bridge",
+                        onCheckedChange = { enabled ->
+                            onUpdateSettings { it.copy(twoWayBridgeBoost = enabled) }
+                        }
+                    )
+                    GlassDivider()
+                    SettingSwitchRow(
                         title = "تقویت صدای طرف مقابل با بلندگوی خودکار",
-                        subtitle = "در تماس‌ها بلندگو را فعال می‌کند تا صدای طرف مقابل واضح‌تر ضبط شود",
+                        subtitle = "در تماس‌ها بلندگو را فعال می‌کند تا صدای طرف مقابل با حداکثر قدرت ضبط شود",
                         checked = settings.autoSpeakerBoost,
                         testTag = "switch_auto_speaker",
                         onCheckedChange = { enabled ->
@@ -532,7 +543,7 @@ fun SettingsScreen(
                     GlassDivider()
                     SettingSwitchRow(
                         title = "حذف نویز محیط (Noise Suppressor)",
-                        subtitle = if (deviceStatus.supportsNoiseSuppressor) "پشتیبانی سخت‌افزاری فعال روی گوشی شما" else "پشتیبانی استاندارد",
+                        subtitle = if (deviceStatus.supportsNoiseSuppressor) "توصیه برای ضبط دوطرفه: خاموش تا صدای طرف مقابل حذف نشود" else "پشتیبانی استاندارد",
                         checked = settings.noiseSuppression,
                         testTag = "switch_noise_suppressor",
                         onCheckedChange = { enabled ->
@@ -542,7 +553,7 @@ fun SettingsScreen(
                     GlassDivider()
                     SettingSwitchRow(
                         title = "تقویت خودکار صدا (AGC)",
-                        subtitle = "افزایش خودکار صدای ضعیف در فرمت WAV",
+                        subtitle = "افزایش هوشمند صدای ضعیف طرف مقابل هنگام مکالمه",
                         checked = settings.autoGainControl,
                         testTag = "switch_agc",
                         onCheckedChange = { enabled ->
@@ -552,7 +563,7 @@ fun SettingsScreen(
                     GlassDivider()
                     SettingSwitchRow(
                         title = "حذف اکو (Echo Canceler)",
-                        subtitle = "جلوگیری از برگشت صدا هنگام بلندگو",
+                        subtitle = "توصیه برای ضبط دوطرفه: خاموش تا صدای گوشی فیلتر نشود",
                         checked = settings.echoCancellation,
                         testTag = "switch_aec",
                         onCheckedChange = { enabled ->
@@ -561,12 +572,54 @@ fun SettingsScreen(
                     )
 
                     GlassDivider()
+                    SettingSwitchRow(
+                        title = "دکمه شناور ضبط فوری روی صفحه تماس",
+                        subtitle = "نمایش کلید کوچک قابل جابجایی هنگام مکالمه برای ضبط با یک لمس",
+                        checked = settings.floatingButtonOnCalls,
+                        testTag = "switch_floating_on_calls",
+                        onCheckedChange = { enabled ->
+                            if (enabled && !permissionSummary.hasOverlayPermission) {
+                                onOpenOverlaySettings()
+                            }
+                            onUpdateSettings { it.copy(floatingButtonOnCalls = enabled) }
+                        }
+                    )
+                    GlassDivider()
+                    SettingSwitchRow(
+                        title = "نمایش همیشگی دکمه شناور (جابجایی و دسترسی سریع)",
+                        subtitle = "دکمه شناور روی صفحه نمایش بماند تا جای دلخواه آن را تنظیم کنید",
+                        checked = settings.floatingButtonAlwaysOn,
+                        testTag = "switch_floating_always",
+                        onCheckedChange = { enabled ->
+                            if (enabled && !permissionSummary.hasOverlayPermission) {
+                                onOpenOverlaySettings()
+                            }
+                            onUpdateSettings { it.copy(floatingButtonAlwaysOn = enabled) }
+                        }
+                    )
+
+                    if (!permissionSummary.hasOverlayPermission) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedButton(
+                            onClick = onOpenOverlaySettings,
+                            border = BorderStroke(1.dp, colors.indigo.copy(alpha = 0.6f)),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("settings_overlay_button")
+                        ) {
+                            Text("فعال‌سازی اجازه نمایش کلید شناور روی تماس‌ها", color = colors.indigo)
+                        }
+                    }
+
+                    GlassDivider()
                     Column(modifier = Modifier.padding(vertical = 6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("ضریب تقویت نرم‌افزاری صدا (WAV)", style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary)
+                            Text("ضریب تقویت نرم‌افزاری صدا", style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary)
                             Text(
                                 text = "${settings.micGainPercent}%",
                                 fontFamily = SpaceGroteskFontFamily,
@@ -579,8 +632,8 @@ fun SettingsScreen(
                             onValueChange = { valPct ->
                                 onUpdateSettings { it.copy(micGainPercent = valPct.roundToInt()) }
                             },
-                            valueRange = 100f..240f,
-                            steps = 13,
+                            valueRange = 100f..250f,
+                            steps = 14,
                             colors = SliderDefaults.colors(thumbColor = colors.cyan, activeTrackColor = colors.cyan)
                         )
                     }
@@ -638,6 +691,7 @@ fun SettingsScreen(
                     permissionSummary.items.forEach { perm ->
                         PermissionStatusLine(perm.title, perm.isGranted)
                     }
+                    PermissionStatusLine("نمایش کلید شناور روی صفحه تماس", permissionSummary.hasOverlayPermission)
                     PermissionStatusLine("معافیت بهینه‌سازی باتری", permissionSummary.isBatteryOptimizationIgnored)
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -670,7 +724,7 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Rounded.BatteryChargingFull, contentDescription = null, tint = colors.emerald, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("باتری گوشی", color = colors.emerald)
+                            Text("پس‌زمینه و باتری", color = colors.emerald)
                         }
                     }
 

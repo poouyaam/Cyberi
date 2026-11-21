@@ -30,16 +30,18 @@ class CallStateReceiver : BroadcastReceiver() {
         when (action) {
             Intent.ACTION_BOOT_COMPLETED,
             "android.intent.action.QUICKBOOT_POWERON" -> {
-                val pendingResult = goAsync()
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        CallStateTracker.reset(context)
-                        val settings = SettingsRepository(context).getCurrentSettings()
-                        if (settings.autoRecordEnabled && settings.keepMonitorServiceAlive) {
-                            CallRecorderService.startMonitoring(context)
+                if (android.os.Build.VERSION.SDK_INT < 35) {
+                    val pendingResult = goAsync()
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            CallStateTracker.reset(context)
+                            val settings = SettingsRepository(context).getCurrentSettings()
+                            if (settings.autoRecordEnabled && settings.keepMonitorServiceAlive) {
+                                CallRecorderService.startMonitoring(context)
+                            }
+                        } finally {
+                            pendingResult.finish()
                         }
-                    } finally {
-                        pendingResult.finish()
                     }
                 }
             }
@@ -52,6 +54,12 @@ class CallStateReceiver : BroadcastReceiver() {
                     TelephonyManager.EXTRA_STATE_OFFHOOK -> TelephonyManager.CALL_STATE_OFFHOOK
                     TelephonyManager.EXTRA_STATE_IDLE -> TelephonyManager.CALL_STATE_IDLE
                     else -> return
+                }
+
+                when (stateInt) {
+                    TelephonyManager.CALL_STATE_RINGING,
+                    TelephonyManager.CALL_STATE_OFFHOOK -> CallRecorderService.showCallOverlay(context)
+                    TelephonyManager.CALL_STATE_IDLE -> CallRecorderService.hideCallOverlay(context)
                 }
 
                 val transition = CallStateTracker.onTelephonyStateChanged(context, stateInt)

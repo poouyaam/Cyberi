@@ -635,6 +635,7 @@ fun MiniAudioPlayerBar(
     onTogglePlay: () -> Unit,
     onSeek: (Long) -> Unit,
     onCycleSpeed: () -> Unit,
+    onToggleBoost: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -696,6 +697,32 @@ fun MiniAudioPlayerBar(
                 }
             }
 
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (playbackState.isBoostEnabled) colors.emerald.copy(alpha = 0.20f) else colors.surface,
+                border = BorderStroke(
+                    1.dp,
+                    if (playbackState.isBoostEnabled) colors.emerald else colors.glassBorderSubtle
+                ),
+                onClick = onToggleBoost,
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("mini_player_boost")
+            ) {
+                Text(
+                    text = if (playbackState.isBoostEnabled) "+9dB" else "عادی",
+                    fontFamily = SpaceGroteskFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = if (playbackState.isBoostEnabled) colors.emerald else colors.textSecondary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = colors.indigo.copy(alpha = 0.16f),
@@ -722,6 +749,17 @@ fun MiniAudioPlayerBar(
                     tint = colors.textSecondary
                 )
             }
+        }
+
+        if (!playbackState.errorMessage.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = playbackState.errorMessage,
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.amber,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
 
         Slider(

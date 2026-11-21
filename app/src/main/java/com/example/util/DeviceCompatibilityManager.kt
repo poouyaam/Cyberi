@@ -20,6 +20,7 @@ data class DeviceCompatibilityStatus(
     val hasReadPhoneState: Boolean,
     val hasReadContacts: Boolean,
     val hasPostNotifications: Boolean,
+    val hasOverlayPermission: Boolean,
     val isBatteryOptimizationIgnored: Boolean,
     val supportsNoiseSuppressor: Boolean,
     val supportsEchoCanceler: Boolean,
@@ -73,6 +74,7 @@ object DeviceCompatibilityManager {
             true
         }
 
+        val hasOverlay = Settings.canDrawOverlays(context)
         val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
         val batteryIgnored = pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
 
@@ -81,6 +83,7 @@ object DeviceCompatibilityManager {
             hasReadPhoneState = hasPhone,
             hasReadContacts = hasContacts,
             hasPostNotifications = hasNotif,
+            hasOverlayPermission = hasOverlay,
             isBatteryOptimizationIgnored = batteryIgnored,
             supportsNoiseSuppressor = NoiseSuppressor.isAvailable(),
             supportsEchoCanceler = AcousticEchoCanceler.isAvailable(),
@@ -91,11 +94,28 @@ object DeviceCompatibilityManager {
     }
 
     fun openBatteryOptimizationSettings(context: Context) {
-        runCatching {
-            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
+        val candidates = listOf(
+            // Xiaomi MIUI / HyperOS Autostart & Background permission screen
+            Intent().apply {
+                component = android.content.ComponentName(
+                    "com.miui.securitycenter",
+                    "com.miui.permcenter.autostart.AutoStartManagementActivity"
+                )
+            },
+            // Direct app details page (shows Battery -> Unrestricted & Permissions for Cyberi)
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", context.packageName, null)
+            ),
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        )
+        for (intent in candidates) {
+            val ok = runCatching {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                true
+            }.getOrDefault(false)
+            if (ok) return
         }
     }
 
@@ -108,6 +128,20 @@ object DeviceCompatibilityManager {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
+        }
+    }
+
+    fun openOverlayPermissionSettings(context: Context) {
+        runCatching {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.fromParts("package", context.packageName, null)
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }.onFailure {
+            openAppPermissionSettings(context)
         }
     }
 

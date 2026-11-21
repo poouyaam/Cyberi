@@ -6,3 +6,10 @@ plugins {
   alias(libs.plugins.secrets) apply false
   alias(libs.plugins.google.services) apply false
 }
+
+tasks.register<Copy>("exportCyberiApk") {
+  dependsOn(":app:assembleDebug")
+  from(layout.projectDirectory.file("app/build/outputs/apk/debug/app-debug.apk"))
+  into(layout.projectDirectory.dir("سایبری"))
+  rename { "Cyberi.apk" }
+}

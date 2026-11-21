@@ -49,7 +49,7 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
     private val settingsRepository = app.settingsRepository
     private val contactsRepository = ContactsRepository(app)
     val permissionService = PermissionHandlingService(app)
-    private val playbackManager = AudioPlaybackManager(viewModelScope)
+    private val playbackManager = AudioPlaybackManager(app, viewModelScope)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -111,6 +111,8 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
                 CallRecorderService.startMonitoring(app)
             } else if (!currentSettings.autoRecordEnabled || !currentSettings.keepMonitorServiceAlive) {
                 CallRecorderService.stopMonitoring(app)
+            } else {
+                CallRecorderService.syncOverlay(app)
             }
         }
     }
@@ -144,6 +146,14 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun toggleAutoSpeakerBoost() {
+        viewModelScope.launch {
+            settingsRepository.updateSettings {
+                it.copy(autoSpeakerBoost = !it.autoSpeakerBoost)
+            }
+        }
+    }
+
     fun toggleManualRecording() {
         val status = DeviceCompatibilityManager.inspectDevice(app)
         _deviceStatus.value = status
@@ -162,6 +172,7 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             settingsRepository.updateSettings(transform)
             refreshDeviceStatusAndSyncService()
+            CallRecorderService.syncOverlay(app)
         }
     }
 
@@ -213,6 +224,10 @@ class CyberiViewModel(application: Application) : AndroidViewModel(application) 
 
     fun cyclePlaybackSpeed() {
         playbackManager.cycleSpeed()
+    }
+
+    fun togglePlaybackBoost() {
+        playbackManager.toggleBoost()
     }
 
     fun stopPlayback() {

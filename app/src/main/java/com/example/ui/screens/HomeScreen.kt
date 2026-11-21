@@ -94,7 +94,9 @@ fun HomeScreen(
     playbackState: PlaybackUiState,
     onRequestPermissions: () -> Unit,
     onOpenBatterySettings: () -> Unit,
+    onOpenOverlaySettings: () -> Unit,
     onToggleAutoRecord: () -> Unit,
+    onToggleSpeakerBoost: () -> Unit,
     onToggleManualRecord: () -> Unit,
     onShareApp: () -> Unit,
     onTogglePlay: (RecordingEntity) -> Unit,
@@ -244,7 +246,10 @@ fun HomeScreen(
             }
 
             // Smart Permission & Automation Banner
-            if (!permissionSummary.allFullAutomationGranted || !permissionSummary.isBatteryOptimizationIgnored) {
+            if (!permissionSummary.allFullAutomationGranted ||
+                !permissionSummary.isBatteryOptimizationIgnored ||
+                !permissionSummary.hasOverlayPermission
+            ) {
                 item {
                     GlassCard(
                         highlighted = !permissionSummary.allEssentialGranted,
@@ -276,9 +281,9 @@ fun HomeScreen(
                                 )
                                 Text(
                                     text = if (!permissionSummary.allFullAutomationGranted) {
-                                        "برای اتوماسیون کامل تماس‌ها و تطبیق نام مخاطبین، دسترسی‌های لازم را تایید کنید."
+                                        "برای اتوماسیون کامل تماس‌ها، ضبط در پس‌زمینه و تطبیق مخاطبین، دسترسی‌های لازم را تایید کنید."
                                     } else {
-                                        "برای فعال ماندن همیشگی ضبط خودکار، سایبری را از محدودیت باتری خارج کنید."
+                                        "برای اینکه سیستم گوشی صدای ضبط در پس‌زمینه را قطع نکند، «شروع خودکار» و «باتری بدون محدودیت» را فعال کنید."
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = colors.textSecondary
@@ -318,8 +323,23 @@ fun HomeScreen(
                                         .height(48.dp)
                                         .testTag("battery_opt_button")
                                 ) {
-                                    Text("تنظیم باتری", color = colors.cyan)
+                                    Text("دسترسی پس‌زمینه و باتری", color = colors.cyan)
                                 }
+                            }
+                        }
+
+                        if (!permissionSummary.hasOverlayPermission) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = onOpenOverlaySettings,
+                                border = BorderStroke(1.dp, colors.indigo.copy(alpha = 0.65f)),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .testTag("overlay_permission_button")
+                            ) {
+                                Text("فعال‌سازی کلید شناور روی صفحه تماس", color = colors.indigo)
                             }
                         }
                     }
@@ -461,11 +481,11 @@ fun HomeScreen(
                                 onClick = onOpenSettings
                             )
                             InfoGlassPill(
-                                label = "${settings.sampleRateHz / 1000}kHz • ${settings.bitrateKbps}k",
+                                label = if (settings.autoSpeakerBoost) "بلندگوی تماس: روشن" else "تقویت طرف مقابل",
                                 icon = Icons.Rounded.Tune,
-                                tint = colors.indigo,
+                                tint = if (settings.autoSpeakerBoost) colors.emerald else colors.indigo,
                                 modifier = Modifier.weight(1f),
-                                onClick = onOpenSettings
+                                onClick = onToggleSpeakerBoost
                             )
                         }
                     }

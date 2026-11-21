@@ -127,7 +127,7 @@ enum class AudioSourceOption(
 
     companion object {
         fun fromId(id: String?): AudioSourceOption =
-            entries.firstOrNull { it.id == id } ?: AUTO_SMART
+            entries.firstOrNull { it.id == id } ?: VOICE_CALL
     }
 }
 
@@ -165,15 +165,18 @@ data class RecordingSettings(
     val recordIncomingCalls: Boolean = true,
     val recordOutgoingCalls: Boolean = true,
     val audioFormat: AudioFormatOption = AudioFormatOption.M4A_AAC,
-    val audioSource: AudioSourceOption = AudioSourceOption.AUTO_SMART,
-    val sampleRateHz: Int = 48000,
-    val bitrateKbps: Int = 192,
+    val audioSource: AudioSourceOption = AudioSourceOption.VOICE_CALL,
+    val sampleRateHz: Int = 44100,
+    val bitrateKbps: Int = 128,
     val stereoChannels: Boolean = false,
-    val noiseSuppression: Boolean = true,
+    val noiseSuppression: Boolean = false,
     val autoGainControl: Boolean = true,
-    val echoCancellation: Boolean = true,
-    val micGainPercent: Int = 140,
+    val echoCancellation: Boolean = false,
+    val micGainPercent: Int = 180,
     val autoSpeakerBoost: Boolean = false,
+    val twoWayBridgeBoost: Boolean = true,
+    val floatingButtonOnCalls: Boolean = true,
+    val floatingButtonAlwaysOn: Boolean = false,
     val startDelaySeconds: Int = 0,
     val minDurationSeconds: Int = 2,
     val autoExportToMusic: Boolean = true,

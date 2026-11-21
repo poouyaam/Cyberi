@@ -1,7 +1,13 @@
 package com.example.audio
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.PlaybackParams
+import android.media.audiofx.LoudnessEnhancer
+import android.os.Build
 import com.example.data.db.RecordingEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,12 +28,19 @@ data class PlaybackUiState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val speed: Float = 1.0f,
+    val isBoostEnabled: Boolean = true,
     val errorMessage: String? = null
 )
 
-class AudioPlaybackManager(private val scope: CoroutineScope) {
+class AudioPlaybackManager(
+    private val context: Context,
+    private val scope: CoroutineScope
+) {
     private var mediaPlayer: MediaPlayer? = null
+    private var loudnessEnhancer: LoudnessEnhancer? = null
     private var progressJob: Job? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
     private val _state = MutableStateFlow(PlaybackUiState())
     val state: StateFlow<PlaybackUiState> = _state.asStateFlow()
@@ -48,24 +61,57 @@ class AudioPlaybackManager(private val scope: CoroutineScope) {
     private fun startNew(recording: RecordingEntity) {
         stop()
         val file = File(recording.filePath)
-        if (!file.exists()) {
-            _state.update { it.copy(errorMessage = "فایل صوتی یافت نشد") }
+        if (!file.exists() || file.length() <= 64L) {
+            _state.update { it.copy(errorMessage = "فایل صوتی یافت نشد یا خالی است") }
             return
         }
+
+        val isAllFlatSilence = recording.waveformSamples
+            .split(",")
+            .mapNotNull { it.trim().toIntOrNull() }
+            .let { bars -> bars.isNotEmpty() && bars.all { it <= 6 } }
+        val mediaVolume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 1
+        val warningHint = when {
+            mediaVolume == 0 -> "صدای رسانه گوشی قطع است؛ کلید افزایش صدا را بزنید"
+            isAllFlatSilence -> "این فایل فاقد سیگنال صوتی است (در ضبط قبلی صدا مسدود شده بود)"
+            else -> null
+        }
+
+        requestFocus()
+
         runCatching {
             val player = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
                 setDataSource(file.absolutePath)
                 prepare()
-                playbackParams = PlaybackParams().setSpeed(_state.value.speed)
+                runCatching {
+                    playbackParams = PlaybackParams().setSpeed(_state.value.speed)
+                }
                 setOnCompletionListener {
                     _state.update {
                         it.copy(isPlaying = false, positionMs = 0L)
                     }
                     runCatching { seekTo(0) }
                 }
+                setOnErrorListener { _, _, _ ->
+                    _state.update {
+                        it.copy(
+                            isPlaying = false,
+                            errorMessage = "خطا در پخش این فایل صوتی"
+                        )
+                    }
+                    true
+                }
                 start()
             }
             mediaPlayer = player
+            attachLoudnessEnhancer(player.audioSessionId, _state.value.isBoostEnabled)
+
             _state.update {
                 it.copy(
                     activeRecordingId = recording.id,
@@ -73,12 +119,34 @@ class AudioPlaybackManager(private val scope: CoroutineScope) {
                     isPlaying = true,
                     positionMs = 0L,
                     durationMs = player.duration.toLong().coerceAtLeast(recording.durationMs),
-                    errorMessage = null
+                    errorMessage = warningHint
                 )
             }
             startProgressUpdater()
         }.onFailure {
+            abandonFocus()
             _state.update { it.copy(errorMessage = "خطا در پخش این فرمت صوتی") }
+        }
+    }
+
+    private fun attachLoudnessEnhancer(sessionId: Int, enabled: Boolean) {
+        runCatching { loudnessEnhancer?.release() }
+        loudnessEnhancer = runCatching {
+            LoudnessEnhancer(sessionId).apply {
+                setTargetGain(if (enabled) 900 else 0) // +9 dB clear speech boost
+                this.enabled = enabled
+            }
+        }.getOrNull()
+    }
+
+    fun toggleBoost() {
+        val next = !_state.value.isBoostEnabled
+        _state.update { it.copy(isBoostEnabled = next) }
+        runCatching {
+            loudnessEnhancer?.apply {
+                setTargetGain(if (next) 900 else 0)
+                enabled = next
+            }
         }
     }
 
@@ -88,6 +156,7 @@ class AudioPlaybackManager(private val scope: CoroutineScope) {
     }
 
     fun resume() {
+        requestFocus()
         runCatching {
             mediaPlayer?.start()
             _state.update { it.copy(isPlaying = true) }
@@ -118,11 +187,51 @@ class AudioPlaybackManager(private val scope: CoroutineScope) {
     fun stop() {
         progressJob?.cancel()
         progressJob = null
+        runCatching { loudnessEnhancer?.release() }
+        loudnessEnhancer = null
         runCatching { mediaPlayer?.stop() }
         runCatching { mediaPlayer?.release() }
         mediaPlayer = null
+        abandonFocus()
         _state.update {
-            PlaybackUiState(speed = it.speed)
+            PlaybackUiState(speed = it.speed, isBoostEnabled = it.isBoostEnabled)
+        }
+    }
+
+    private fun requestFocus() {
+        val am = audioManager ?: return
+        runCatching {
+            if (am.mode == AudioManager.MODE_IN_COMMUNICATION) {
+                am.mode = AudioManager.MODE_NORMAL
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .build()
+                audioFocusRequest = req
+                am.requestAudioFocus(req)
+            } else {
+                @Suppress("DEPRECATION")
+                am.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            }
+        }
+    }
+
+    private fun abandonFocus() {
+        val am = audioManager ?: return
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+                audioFocusRequest = null
+            } else {
+                @Suppress("DEPRECATION")
+                am.abandonAudioFocus(null)
+            }
         }
     }
 

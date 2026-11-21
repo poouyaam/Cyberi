@@ -8,6 +8,7 @@ import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import com.example.model.AudioSourceOption
+import com.example.model.CallType
 import com.example.model.RecordingSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,7 @@ import kotlin.math.roundToInt
 class WavAudioRecorder(
     private val outputFile: File,
     private val settings: RecordingSettings,
+    private val callType: CallType = CallType.MANUAL,
     private val onAmplitude: (Int) -> Unit
 ) {
     private var audioRecord: AudioRecord? = null
@@ -33,6 +35,11 @@ class WavAudioRecorder(
 
     @Volatile
     private var isRecording = false
+
+    @Volatile
+    var hasObservedSignal: Boolean = false
+        private set
+
     var activeSourceLabel: String = settings.audioSource.title
         private set
 
@@ -55,7 +62,7 @@ class WavAudioRecorder(
         if (minBufSize <= 0) return false
         val bufferSize = (minBufSize * 2).coerceAtLeast(4096)
 
-        val candidates = buildSourcePriorityList(settings.audioSource)
+        val candidates = buildSourcePriorityList(settings.audioSource, callType)
         var initializedRecord: AudioRecord? = null
         var chosenSourceLabel = settings.audioSource.title
 
@@ -86,12 +93,12 @@ class WavAudioRecorder(
         attachAudioEffects(record.audioSessionId)
 
         isRecording = true
+        hasObservedSignal = false
         record.startRecording()
 
         recordJob = scope.launch(Dispatchers.IO) {
             outputFile.parentFile?.mkdirs()
             RandomAccessFile(outputFile, "rw").use { raf ->
-                // Write placeholder 44-byte WAV header
                 raf.setLength(0)
                 raf.write(ByteArray(44))
 
@@ -107,7 +114,11 @@ class WavAudioRecorder(
                     if (readCount > 0) {
                         var maxSample = 0
                         for (i in 0 until readCount) {
-                            val boosted = (buffer[i] * gainFactor).roundToInt()
+                            val rawSample = buffer[i].toInt()
+                            if (rawSample != 0) {
+                                hasObservedSignal = true
+                            }
+                            val boosted = (rawSample * gainFactor).roundToInt()
                                 .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
                             val s = boosted.toShort()
                             buffer[i] = s
@@ -131,7 +142,6 @@ class WavAudioRecorder(
                     }
                 }
 
-                // Finalize RIFF/WAV header
                 writeWavHeader(
                     raf = raf,
                     totalAudioBytes = totalBytesWritten,
@@ -200,7 +210,6 @@ class WavAudioRecorder(
         val totalDataLen = totalAudioBytes + 36
 
         val header = ByteArray(44)
-        // RIFF chunk
         header[0] = 'R'.code.toByte()
         header[1] = 'I'.code.toByte()
         header[2] = 'F'.code.toByte()
@@ -210,14 +219,13 @@ class WavAudioRecorder(
         header[9] = 'A'.code.toByte()
         header[10] = 'V'.code.toByte()
         header[11] = 'E'.code.toByte()
-        // fmt subchunk
         header[12] = 'f'.code.toByte()
         header[13] = 'm'.code.toByte()
         header[14] = 't'.code.toByte()
         header[15] = ' '.code.toByte()
-        writeIntLE(header, 16, 16) // PCM chunk size
+        writeIntLE(header, 16, 16)
         header[20] = 1
-        header[21] = 0 // PCM format = 1
+        header[21] = 0
         header[22] = channels.toByte()
         header[23] = 0
         writeIntLE(header, 24, sampleRate)
@@ -226,7 +234,6 @@ class WavAudioRecorder(
         header[33] = 0
         header[34] = bitsPerSample.toByte()
         header[35] = 0
-        // data subchunk
         header[36] = 'd'.code.toByte()
         header[37] = 'a'.code.toByte()
         header[38] = 't'.code.toByte()
@@ -245,20 +252,48 @@ class WavAudioRecorder(
     }
 
     companion object {
-        fun buildSourcePriorityList(selected: AudioSourceOption): List<Pair<Int, String>> {
+        fun buildSourcePriorityList(
+            selected: AudioSourceOption,
+            callType: CallType = CallType.MANUAL
+        ): List<Pair<Int, String>> {
             return when (selected) {
-                AudioSourceOption.AUTO_SMART -> listOf(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION to "ارتباط صوتی هوشمند",
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION to "حساسیت بالا (هوشمند)",
-                    MediaRecorder.AudioSource.MIC to "میکروفون اصلی"
-                )
-                AudioSourceOption.VOICE_CALL -> listOf(
-                    MediaRecorder.AudioSource.VOICE_CALL to "خط مستقیم تماس",
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION to "ارتباط صوتی (جایگزین خودکار)",
-                    MediaRecorder.AudioSource.MIC to "میکروفون اصلی"
-                )
+                AudioSourceOption.VOICE_CALL -> if (callType == CallType.MANUAL) {
+                    listOf(
+                        MediaRecorder.AudioSource.MIC to "میکروفون اصلی",
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION to "حساسیت بالا (هوشمند)",
+                        MediaRecorder.AudioSource.VOICE_CALL to "خط مستقیم تماس",
+                        MediaRecorder.AudioSource.CAMCORDER to "میکروفون ثانویه"
+                    )
+                } else {
+                    listOf(
+                        MediaRecorder.AudioSource.VOICE_CALL to "خط مستقیم تماس دوطرفه (VOICE_CALL)",
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION to "حساسیت بالا (دریافت صدای طرف مقابل)",
+                        MediaRecorder.AudioSource.MIC to "میکروفون اصلی",
+                        MediaRecorder.AudioSource.CAMCORDER to "میکروفون ثانویه (بلندگو)",
+                        MediaRecorder.AudioSource.VOICE_COMMUNICATION to "ارتباط صوتی دوطرفه",
+                        MediaRecorder.AudioSource.DEFAULT to "مسیر پیش‌فرض سیستم"
+                    )
+                }
+                AudioSourceOption.AUTO_SMART -> if (callType == CallType.MANUAL) {
+                    listOf(
+                        MediaRecorder.AudioSource.MIC to "میکروفون اصلی",
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION to "حساسیت بالا (هوشمند)",
+                        MediaRecorder.AudioSource.CAMCORDER to "میکروفون ثانویه",
+                        MediaRecorder.AudioSource.VOICE_COMMUNICATION to "ارتباط صوتی دوطرفه"
+                    )
+                } else {
+                    listOf(
+                        MediaRecorder.AudioSource.VOICE_CALL to "خط مستقیم تماس دوطرفه (VOICE_CALL)",
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION to "حساسیت بالا (تماس)",
+                        MediaRecorder.AudioSource.MIC to "میکروفون اصلی",
+                        MediaRecorder.AudioSource.CAMCORDER to "میکروفون ثانویه (بلندگو)",
+                        MediaRecorder.AudioSource.VOICE_COMMUNICATION to "ارتباط صوتی دوطرفه",
+                        MediaRecorder.AudioSource.DEFAULT to "مسیر پیش‌فرض سیستم"
+                    )
+                }
                 AudioSourceOption.VOICE_COMMUNICATION -> listOf(
                     MediaRecorder.AudioSource.VOICE_COMMUNICATION to "ارتباط صوتی دوطرفه",
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION to "حساسیت بالا (جایگزین)",
                     MediaRecorder.AudioSource.MIC to "میکروفون اصلی"
                 )
                 AudioSourceOption.VOICE_RECOGNITION -> listOf(
@@ -266,14 +301,15 @@ class WavAudioRecorder(
                     MediaRecorder.AudioSource.MIC to "میکروفون اصلی"
                 )
                 AudioSourceOption.MIC -> listOf(
-                    MediaRecorder.AudioSource.MIC to "میکروفون استاندارد"
+                    MediaRecorder.AudioSource.MIC to "میکروفون استاندارد",
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION to "حساسیت بالا (جایگزین)"
                 )
             }
         }
 
         fun downsampleWaveform(raw: List<Int>, targetBars: Int = 36): List<Int> {
-            if (raw.isEmpty()) return List(targetBars) { 12 }
-            if (raw.size <= targetBars) return raw
+            if (raw.isEmpty()) return List(targetBars) { 6 }
+            if (raw.size <= targetBars) return raw.map { it.coerceIn(6, 100) }
             val step = raw.size.toFloat() / targetBars
             return List(targetBars) { index ->
                 val start = (index * step).toInt()

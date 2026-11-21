@@ -220,6 +220,7 @@ fun CyberiAppRoot(
                                 },
                                 onSeek = viewModel::seekTo,
                                 onCycleSpeed = viewModel::cyclePlaybackSpeed,
+                                onToggleBoost = viewModel::togglePlaybackBoost,
                                 onClose = viewModel::stopPlayback
                             )
 
@@ -284,7 +285,11 @@ fun CyberiAppRoot(
                                     onOpenBatterySettings = {
                                         DeviceCompatibilityManager.openBatteryOptimizationSettings(context)
                                     },
+                                    onOpenOverlaySettings = {
+                                        DeviceCompatibilityManager.openOverlayPermissionSettings(context)
+                                    },
                                     onToggleAutoRecord = viewModel::toggleAutoRecord,
+                                    onToggleSpeakerBoost = viewModel::toggleAutoSpeakerBoost,
                                     onToggleManualRecord = viewModel::toggleManualRecording,
                                     onShareApp = shareAppAction,
                                     onTogglePlay = viewModel::togglePlay,
@@ -343,6 +348,9 @@ fun CyberiAppRoot(
                                     },
                                     onOpenSystemAppSettings = {
                                         DeviceCompatibilityManager.openAppPermissionSettings(context)
+                                    },
+                                    onOpenOverlaySettings = {
+                                        DeviceCompatibilityManager.openOverlayPermissionSettings(context)
                                     },
                                     onOpenSupportEmail = {
                                         SupportActions.openGmailSupport(context)

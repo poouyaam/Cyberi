@@ -23,6 +23,7 @@ data class PermissionSummary(
     val hasReadPhoneState: Boolean = false,
     val hasReadContacts: Boolean = false,
     val hasPostNotifications: Boolean = false,
+    val hasOverlayPermission: Boolean = false,
     val isBatteryOptimizationIgnored: Boolean = false,
     val items: List<PermissionItemStatus> = emptyList()
 ) {
@@ -126,11 +127,14 @@ class PermissionHandlingService(private val context: Context) {
             }
         }
 
+        val hasOverlay = android.provider.Settings.canDrawOverlays(context)
+
         return PermissionSummary(
             hasRecordAudio = mic,
             hasReadPhoneState = phone,
             hasReadContacts = contacts,
             hasPostNotifications = notif,
+            hasOverlayPermission = hasOverlay,
             isBatteryOptimizationIgnored = batteryIgnored,
             items = items
         )
